@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://fieldagentai.com"),
   title: "Field Agent AI, LLC",
   description:
-    "Field Agent AI builds AI-powered operating systems for service businesses, including HedgeBotCRM, ApplianceBot.net, PoolBotCRM, and TreeBotCRM.",
+    "Field Agent AI builds AI-powered operating systems for service businesses and LifeSignalAI, a senior wellness check-in product.",
   openGraph: {
     title: "Field Agent AI, LLC",
     description:

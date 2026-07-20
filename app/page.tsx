@@ -574,6 +574,27 @@ export default function HomePage() {
             </ul>
           </div>
         </div>
+        <article className="card lifesignal-spotlight">
+          <div className="card-glow" />
+          <div>
+            <p className="card-kicker">Senior wellness</p>
+            <h3>LifeSignalAI</h3>
+            <p>
+              A simple daily wellness check-in for older adults and the people
+              who care about them. LifeSignalAI makes it easy to share an
+              “I’m okay” signal, stay connected, and let trusted contacts know
+              when a check-in is missed.
+            </p>
+          </div>
+          <div className="lifesignal-details">
+            <span>Simple daily check-ins</span>
+            <span>Trusted-contact alerts</span>
+            <span>Independence with peace of mind</span>
+          </div>
+          <a href="#consultation" className="button button-secondary">
+            Ask About LifeSignalAI
+          </a>
+        </article>
         <div className="card-grid four-up">
           {apps.map((app) => (
             <AppShowcaseCard key={app.name} app={app} />
@@ -1040,6 +1061,7 @@ export default function HomePage() {
           </div>
           <div>
             <h3>Products</h3>
+            <a href="#consultation">LifeSignalAI</a>
             {apps.map((app) => (
               <a key={app.name} href="#apps">
                 {app.name}
