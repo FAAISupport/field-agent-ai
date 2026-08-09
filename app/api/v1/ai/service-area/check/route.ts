@@ -1,37 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import { adminDb, isApiContext, jsonError, requireAiContext } from "@/lib/ai-api/core";
+import { dbSelect, isApiContext, jsonError, readJsonObject, requireAiContext, requiredString } from "@/lib/ai-api/core";
 
-const Body = z.object({
-  street: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().min(2),
-  postal_code: z.string().optional(),
-  service: z.string().optional()
-});
+type ServiceArea = {
+  id: string;
+  name: string;
+  state?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  service?: string | null;
+  booking_allowed?: boolean | null;
+};
 
 export async function POST(req: NextRequest) {
   const ctx = requireAiContext(req);
   if (!isApiContext(ctx)) return ctx;
-  const parsed = Body.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return jsonError("INVALID_REQUEST", parsed.error.message, 422);
+  const body = await readJsonObject(req);
+  if (!body) return jsonError("INVALID_REQUEST", "A JSON object is required.", 422);
+  const state = requiredString(body, "state");
+  if (!state) return jsonError("INVALID_REQUEST", "state is required.", 422);
 
-  const db = adminDb();
-  const { data, error } = await db.from("service_areas")
-    .select("id, name, state, city, postal_code, service, booking_allowed")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("active", true);
-  if (error) return jsonError("INTERNAL_ERROR", "Unable to verify service area.", 500, true);
-
-  const input = parsed.data;
-  const match = (data ?? []).find((area) => {
-    const stateOk = !area.state || area.state.toLowerCase() === input.state.toLowerCase();
-    const cityOk = !area.city || (!!input.city && area.city.toLowerCase() === input.city.toLowerCase());
-    const zipOk = !area.postal_code || (!!input.postal_code && area.postal_code === input.postal_code);
-    const serviceOk = !area.service || !input.service || area.service.toLowerCase() === input.service.toLowerCase();
-    return stateOk && cityOk && zipOk && serviceOk;
-  });
-
-  if (!match) return NextResponse.json({ success: true, in_service_area: false, booking_allowed: false, reason: "Outside configured service territory." });
-  return NextResponse.json({ success: true, in_service_area: true, booking_allowed: match.booking_allowed !== false, service_area: match.name });
+  try {
+    const areas = await dbSelect<ServiceArea>("service_areas", {
+      select: "id,name,state,city,postal_code,service,booking_allowed",
+      filters: { tenant_id: `eq.${ctx.tenantId}`, active: "eq.true" }
+    });
+    const city = typeof body.city === "string" ? body.city : "";
+    const postal = typeof body.postal_code === "string" ? body.postal_code : "";
+    const service = typeof body.service === "string" ? body.service : "";
+    const match = areas.find((area) => {
+      const stateOk = !area.state || area.state.toLowerCase() === state.toLowerCase();
+      const cityOk = !area.city || area.city.toLowerCase() === city.toLowerCase();
+      const zipOk = !area.postal_code || area.postal_code === postal;
+      const serviceOk = !area.service || !service || area.service.toLowerCase() === service.toLowerCase();
+      return stateOk && cityOk && zipOk && serviceOk;
+    });
+    if (!match) return NextResponse.json({ success: true, in_service_area: false, booking_allowed: false, reason: "Outside configured service territory." });
+    return NextResponse.json({ success: true, in_service_area: true, booking_allowed: match.booking_allowed !== false, service_area: match.name });
+  } catch {
+    return jsonError("INTERNAL_ERROR", "Unable to verify service area.", 500, true);
+  }
 }
