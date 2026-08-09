@@ -101,6 +101,7 @@ create table if not exists appointments (
   updated_at timestamptz not null default now()
 );
 create index if not exists appointments_tenant_lead_idx on appointments (tenant_id, lead_id);
+create unique index if not exists appointments_slot_unique_idx on appointments (slot_id) where slot_id is not null;
 
 create table if not exists messages (
   id uuid primary key default gen_random_uuid(),
