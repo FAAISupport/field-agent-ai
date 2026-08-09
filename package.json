@@ -10,9 +10,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.57.4",
     "next": "^16.0.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "twilio": "^5.10.4",
+    "zod": "^4.1.11"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
