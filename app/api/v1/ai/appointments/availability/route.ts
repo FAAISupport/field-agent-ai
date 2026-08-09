@@ -1,43 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import { adminDb, isApiContext, jsonError, requireAiContext } from "@/lib/ai-api/core";
+import { dbSelect, isApiContext, jsonError, readJsonObject, requireAiContext, requiredString } from "@/lib/ai-api/core";
 
-const Body = z.object({
-  lead_id: z.string().uuid(),
-  service: z.string().optional(),
-  preferred_date: z.string().optional(),
-  preferred_time: z.string().optional()
-});
+type Slot = { id: string; starts_at: string; ends_at: string; service?: string | null };
 
 export async function POST(req: NextRequest) {
   const ctx = requireAiContext(req);
   if (!isApiContext(ctx)) return ctx;
-  const parsed = Body.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return jsonError("INVALID_REQUEST", parsed.error.message, 422);
+  const body = await readJsonObject(req);
+  if (!body) return jsonError("INVALID_REQUEST", "A JSON object is required.", 422);
+  const leadId = requiredString(body, "lead_id");
+  if (!leadId) return jsonError("INVALID_REQUEST", "lead_id is required.", 422);
 
-  const db = adminDb();
-  const { data: lead } = await db.from("leads").select("id").eq("id", parsed.data.lead_id).eq("tenant_id", ctx.tenantId).maybeSingle();
-  if (!lead) return jsonError("LEAD_NOT_FOUND", "Lead not found.", 404);
+  try {
+    const leads = await dbSelect<{ id: string }>("leads", { select: "id", filters: { id: `eq.${leadId}`, tenant_id: `eq.${ctx.tenantId}` }, limit: 1 });
+    if (!leads[0]) return jsonError("LEAD_NOT_FOUND", "Lead not found.", 404);
 
-  let query = db.from("appointment_slots")
-    .select("id, starts_at, ends_at, service")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("available", true)
-    .gte("starts_at", new Date().toISOString())
-    .order("starts_at", { ascending: true })
-    .limit(20);
+    const filters: Record<string, string> = {
+      tenant_id: `eq.${ctx.tenantId}`,
+      available: "eq.true",
+      starts_at: `gte.${new Date().toISOString()}`
+    };
+    if (typeof body.service === "string" && body.service.trim()) filters.service = `eq.${body.service.trim()}`;
 
-  if (parsed.data.service) query = query.eq("service", parsed.data.service);
-  const { data, error } = await query;
-  if (error) return jsonError("INTERNAL_ERROR", "Unable to load appointment availability.", 500, true);
-
-  const preferredDate = parsed.data.preferred_date;
-  const slots = (data ?? []).filter((slot) => !preferredDate || slot.starts_at.startsWith(preferredDate)).map((slot) => ({
-    slot_id: slot.id,
-    start: slot.starts_at,
-    end: slot.ends_at,
-    service: slot.service
-  }));
-
-  return NextResponse.json({ success: true, slots });
+    const data = await dbSelect<Slot>("appointment_slots", { select: "id,starts_at,ends_at,service", filters, order: "starts_at.asc", limit: 20 });
+    const preferredDate = typeof body.preferred_date === "string" ? body.preferred_date : null;
+    const slots = data.filter((slot) => !preferredDate || slot.starts_at.startsWith(preferredDate)).map((slot) => ({ slot_id: slot.id, start: slot.starts_at, end: slot.ends_at, service: slot.service }));
+    return NextResponse.json({ success: true, slots });
+  } catch {
+    return jsonError("INTERNAL_ERROR", "Unable to load appointment availability.", 500, true);
+  }
 }
